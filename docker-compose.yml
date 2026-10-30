@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: finanalytics
+      POSTGRES_USER: finanalytics
+      POSTGRES_PASSWORD: finanalytics
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finanalytics -d finanalytics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  simulator:
+    build: .
+    command: python main.py --minutes 0 --rate-limit 250
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  pipeline:
+    build: .
+    command: python run_pipeline.py --interval 60
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build: .
+    command: streamlit run dashboard.py --server.address 0.0.0.0 --server.port 8501
+    env_file: .env
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+

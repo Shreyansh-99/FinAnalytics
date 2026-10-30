@@ -12,7 +12,7 @@ if not logger.handlers:
     ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     logger.addHandler(ch)
 
-BUFFER_SIZE = 200
+BUFFER_SIZE = 500
 FLUSH_INTERVAL_SECONDS = 2.0
 
 class EventWriter:
@@ -37,6 +37,7 @@ class EventWriter:
         Append event to buffer. Expected keys: time, payment_id, order_id, user, amount, method, status, reason, retry
         """
         row = (
+            event.get("event_key"),
             event.get("time"),
             event.get("payment_id"),
             event.get("order_id"),
@@ -45,11 +46,11 @@ class EventWriter:
             event.get("amount"),
             "INR",
             event.get("method"),
-            event.get("method"),  # provider same for now
+            event.get("provider", event.get("method")),
             event.get("status"),
             event.get("reason"),
-            "Delhi",
-            "android",
+            event.get("city"),
+            event.get("device"),
             event.get("retry", False),
             None
         )
@@ -103,11 +104,12 @@ class EventWriter:
         try:
             self.cur.executemany("""
                 INSERT INTO raw.payment_events (
-                    event_time, payment_id, order_id, user_id, merchant_id,
+                    event_key, event_time, payment_id, order_id, user_id, merchant_id,
                     amount, currency, payment_method, provider,
                     status, failure_reason, city, device, is_retry, latency_ms
                 )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (event_key) DO NOTHING
             """, rows)
             self.conn.commit()
             logger.info("Flushed %d events to raw.payment_events", len(rows))
